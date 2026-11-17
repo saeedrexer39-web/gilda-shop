@@ -100,8 +100,7 @@ async function verifyAdmin() {
 }
 
 
-$("#adminAccessButton").addEventListener("click", async () => {
-  const { data, error } = await db.auth.getSession();
+$("adminAccessButton").addEventListener("click", async () => {
 
   if (error) {
     showToast("خطا در بررسی ورود مدیر");
