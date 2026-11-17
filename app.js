@@ -4,13 +4,13 @@
 ================================= */
 
 // اطلاعات اتصال Supabase
-const SUPABASE_URL = "https://uxigmkbctofiezcfvcyq.supabase.co/rest/v1/";
+const SUPABASE_URL = "https://uxigmkbctofiezcfvcyq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_IjnHzzq4DqQl34qQwBmjsA_O-ncAcmn";
-
 const db = window.supabase.createClient(
   SUPABASE_URL,https://uxigmkbctofiezcfvcyq.supabase.co/rest/v1/
   SUPABASE_KEYsb_publishable_IjnHzzq4DqQl34qQwBmjsA_O-ncAcmn
 );
+
 
 const $ = (id) => document.getElementById(id);
 
