@@ -5,7 +5,7 @@
 
 // SUPABASE CONNECTION
 const SUPABASE_URL = "https://uxigmkbctofiezcfvcyq.supabase.co";
-const SUPABASE_KEY = "کلید sb_publishable فعلی خودت را اینجا قرار بده";
+const SUPABASE_KEY = "sb_publishable_IjnHzzq4DqQl34qQwBmjsA_O-ncAcmn";
 
 const db = window.supabase.createClient(
   SUPABASE_URL,
