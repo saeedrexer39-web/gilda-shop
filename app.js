@@ -56,9 +56,15 @@ function showLogin() {
   document.querySelector("main").classList.add("hidden");
   document.querySelector("header").classList.add("hidden");
   document.querySelector("footer").classList.add("hidden");
+function showLogin() {
+  document.querySelector("main").classList.add("hidden");
+  document.querySelector("header").classList.add("hidden");
+  document.querySelector("footer").classList.add("hidden");
 
   $("adminLogin").classList.remove("hidden");
   $("adminDashboard").classList.add("hidden");
+
+  $("adminAccessButton").classList.add("hidden");
 
   window.scrollTo(0, 0);
 }
@@ -74,7 +80,12 @@ function showDashboard() {
 function showStore() {
   $("adminLogin").classList.add("hidden");
   $("adminDashboard").classList.add("hidden");
+
   document.querySelector("main").classList.remove("hidden");
+  document.querySelector("header").classList.remove("hidden");
+  document.querySelector("footer").classList.remove("hidden");
+
+  $("adminAccessButton").classList.remove("hidden");
 }
 
 // =================================
