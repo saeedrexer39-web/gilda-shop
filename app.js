@@ -91,8 +91,14 @@ async function verifyAdmin() {
   return true;
 }
 
-$("adminAccessButton").addEventListener("click", async () => {
-  const { data } = await db.auth.getSession();
+
+$("#adminAccessButton").addEventListener("click", async () => {
+  const { data, error } = await db.auth.getSession();
+
+  if (error) {
+    showToast("خطا در بررسی ورود مدیر");
+    return;
+  }
 
   if (data.session) {
     currentUser = data.session.user;
@@ -101,11 +107,14 @@ $("adminAccessButton").addEventListener("click", async () => {
       showDashboard();
       await loadAdminProducts();
       await loadOrders();
+    } else {
+      showLogin();
     }
   } else {
     showLogin();
   }
 });
+
 
 $("loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
