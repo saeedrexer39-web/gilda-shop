@@ -50,11 +50,18 @@ function makeSlug(name) {
     + "-" + Date.now().toString(36);
 }
 
+
 function showLogin() {
+  document.querySelector("main").classList.add("hidden");
+  document.querySelector("header").classList.add("hidden");
+  document.querySelector("footer").classList.add("hidden");
+
   $("adminLogin").classList.remove("hidden");
   $("adminDashboard").classList.add("hidden");
+
   window.scrollTo(0, 0);
 }
+
 
 function showDashboard() {
   $("adminLogin").classList.add("hidden");
