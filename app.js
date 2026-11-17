@@ -111,27 +111,35 @@ async function verifyAdmin() {
 }
 
 
+
 $("adminAccessButton").addEventListener("click", async () => {
+  try {
+    const { data, error } = await db.auth.getSession();
 
-  if (error) {
-    showToast("خطا در بررسی ورود مدیر");
-    return;
-  }
+    if (error) {
+      showToast("خطا در بررسی ورود مدیر");
+      return;
+    }
 
-  if (data.session) {
-    currentUser = data.session.user;
+    if (data.session) {
+      currentUser = data.session.user;
 
-    if (await verifyAdmin()) {
-      showDashboard();
-      await loadAdminProducts();
-      await loadOrders();
+      if (await verifyAdmin()) {
+        showDashboard();
+        await loadAdminProducts();
+        await loadOrders();
+      } else {
+        showLogin();
+      }
     } else {
       showLogin();
     }
-  } else {
-    showLogin();
+  } catch (err) {
+    console.error("Admin access error:", err);
+    showToast("خطا در باز کردن پنل مدیریت");
   }
 });
+   
 
 
 $("loginForm").addEventListener("submit", async (event) => {
