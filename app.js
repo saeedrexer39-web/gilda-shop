@@ -1,43 +1,54 @@
 
 /* =================================
-   GILDA SHOP - MAIN APPLICATION
+   GILDA SHOP - COMPLETE APPLICATION
 ================================= */
-// اطلاعات اتصال Supabase
 
+// SUPABASE CONNECTION
 const SUPABASE_URL = "https://uxigmkbctofiezcfvcyq.supabase.co";
-const SUPABASE_KEY = "sb_publishable_IjnHzzq4DqQl34qQwBmjsA_O-ncAcmn";
+const SUPABASE_KEY = "کلید sb_publishable فعلی خودت را اینجا قرار بده";
 
 const db = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_KEY
 );
 
-
-
-
-const $ = (id) => document.getElementById(id);
+// GLOBAL VARIABLES
+const $ = id => document.getElementById(id);
 
 let currentUser = null;
-let cart = JSON.parse(localStorage.getItem("gilda-cart") || "[]");
+let cart = [];
+
+try {
+  cart = JSON.parse(localStorage.getItem("gilda-cart") || "[]");
+  if (!Array.isArray(cart)) cart = [];
+} catch {
+  cart = [];
+}
+
 let currentCategory = "all";
 
-// ابزارهای عمومی
+// =================================
+// HELPERS
+// =================================
+
 function money(value) {
   return Number(value || 0).toLocaleString("fa-IR");
 }
 
 function escapeHTML(value) {
-  return String(value ?? "").replace(/[&<>"']/g, char => ({
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#039;"
-  })[char]);
+  })[c]);
 }
 
 function notify(message) {
   const toast = $("toast");
+  if (!toast) return;
+
   toast.textContent = message;
   toast.classList.remove("hidden");
 
@@ -45,37 +56,13 @@ function notify(message) {
 }
 
 function makeSlug(name) {
-  return name.trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
+  return name.trim().toLowerCase().replace(/\s+/g, "-")
     + "-" + Date.now().toString(36);
 }
 
-
-function showLogin() {
-  document.querySelector("main").classList.add("hidden");
-  document.querySelector("header").classList.add("hidden");
-  document.querySelector("footer").classList.add("hidden");
-function showLogin() {
-  document.querySelector("main").classList.add("hidden");
-  document.querySelector("header").classList.add("hidden");
-  document.querySelector("footer").classList.add("hidden");
-
-  $("adminLogin").classList.remove("hidden");
-  $("adminDashboard").classList.add("hidden");
-
-  $("adminAccessButton").classList.add("hidden");
-
-  window.scrollTo(0, 0);
-}
-
-
-function showDashboard() {
-  $("adminLogin").classList.add("hidden");
-  $("adminDashboard").classList.remove("hidden");
-  document.querySelector("main").classList.add("hidden");
-  $("adminDashboard").scrollIntoView();
-}
+// =================================
+// PAGE NAVIGATION
+// =================================
 
 function showStore() {
   $("adminLogin").classList.add("hidden");
@@ -86,6 +73,34 @@ function showStore() {
   document.querySelector("footer").classList.remove("hidden");
 
   $("adminAccessButton").classList.remove("hidden");
+
+  window.scrollTo(0, 0);
+}
+
+function showLogin() {
+  document.querySelector("main").classList.add("hidden");
+  document.querySelector("header").classList.add("hidden");
+  document.querySelector("footer").classList.add("hidden");
+
+  $("adminLogin").classList.remove("hidden");
+  $("adminDashboard").classList.add("hidden");
+  $("adminAccessButton").classList.add("hidden");
+
+  $("loginMessage").textContent = "";
+  window.scrollTo(0, 0);
+}
+
+function showDashboard() {
+  $("adminLogin").classList.add("hidden");
+  $("adminDashboard").classList.remove("hidden");
+
+  document.querySelector("main").classList.add("hidden");
+  document.querySelector("header").classList.add("hidden");
+  document.querySelector("footer").classList.add("hidden");
+
+  $("adminAccessButton").classList.add("hidden");
+
+  window.scrollTo(0, 0);
 }
 
 // =================================
@@ -93,6 +108,8 @@ function showStore() {
 // =================================
 
 async function verifyAdmin() {
+  if (!currentUser) return false;
+
   const { data, error } = await db
     .from("admin_users")
     .select("user_id")
@@ -110,14 +127,12 @@ async function verifyAdmin() {
   return true;
 }
 
-
-
 $("adminAccessButton").addEventListener("click", async () => {
   try {
     const { data, error } = await db.auth.getSession();
 
     if (error) {
-      showToast("خطا در بررسی ورود مدیر");
+      notify("خطا در بررسی ورود مدیر.");
       return;
     }
 
@@ -128,21 +143,17 @@ $("adminAccessButton").addEventListener("click", async () => {
         showDashboard();
         await loadAdminProducts();
         await loadOrders();
-      } else {
-        showLogin();
       }
     } else {
       showLogin();
     }
-  } catch (err) {
-    console.error("Admin access error:", err);
-    showToast("خطا در باز کردن پنل مدیریت");
+  } catch (error) {
+    console.error(error);
+    notify("خطا در باز کردن پنل مدیریت.");
   }
 });
-   
 
-
-$("loginForm").addEventListener("submit", async (event) => {
+$("loginForm").addEventListener("submit", async event => {
   event.preventDefault();
 
   const email = $("adminEmail").value.trim();
@@ -150,24 +161,29 @@ $("loginForm").addEventListener("submit", async (event) => {
 
   $("loginMessage").textContent = "در حال ورود...";
 
-  const { data, error } = await db.auth.signInWithPassword({
-    email,
-    password
-  });
+  try {
+    const { data, error } = await db.auth.signInWithPassword({
+      email,
+      password
+    });
 
-  if (error) {
-    $("loginMessage").textContent =
-      "ورود ناموفق بود. ایمیل یا رمز را بررسی کن.";
-    return;
-  }
+    if (error) {
+      $("loginMessage").textContent =
+        "ایمیل یا رمز عبور اشتباه است.";
+      return;
+    }
 
-  currentUser = data.user;
+    currentUser = data.user;
 
-  if (await verifyAdmin()) {
-    $("loginMessage").textContent = "";
-    showDashboard();
-    await loadAdminProducts();
-    await loadOrders();
+    if (await verifyAdmin()) {
+      $("loginMessage").textContent = "";
+      showDashboard();
+      await loadAdminProducts();
+      await loadOrders();
+    }
+  } catch (error) {
+    console.error(error);
+    $("loginMessage").textContent = "خطا در ورود به حساب.";
   }
 });
 
@@ -178,7 +194,7 @@ $("logoutButton").addEventListener("click", async () => {
   notify("از حساب مدیریت خارج شدی.");
 });
 
-db.auth.onAuthStateChange(async (event, session) => {
+db.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") {
     currentUser = null;
     showStore();
@@ -197,7 +213,7 @@ async function getImageUrl(path) {
     .createSignedUrl(path, 3600);
 
   if (error) {
-    console.error("Image URL error:", error.message);
+    console.error(error);
     return "";
   }
 
@@ -234,77 +250,74 @@ async function uploadImage(file) {
 }
 
 // =================================
-// PRODUCTS - STORE
+// STORE PRODUCTS
 // =================================
 
 async function loadProducts() {
   const grid = $("productsGrid");
   grid.innerHTML = "<p>در حال دریافت محصولات...</p>";
 
-  const { data, error } = await db
-    .from("products")
-    .select("*")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await db
+      .from("products")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    grid.textContent = "دریافت محصولات ناموفق بود.";
-    console.error(error);
-    return;
-  }
+    if (error) throw error;
 
-  let products = data || [];
+    let products = data || [];
 
-  if (currentCategory !== "all") {
-    products = products.filter(
-      product => product.category === currentCategory
-    );
-  }
+    if (currentCategory !== "all") {
+      products = products.filter(
+        p => p.category === currentCategory
+      );
+    }
 
-  if (!products.length) {
-    grid.textContent = "در این دسته هنوز محصولی ثبت نشده است.";
-    return;
-  }
+    if (!products.length) {
+      grid.textContent = "در این دسته محصولی ثبت نشده است.";
+      return;
+    }
 
-  grid.innerHTML = "";
+    grid.innerHTML = "";
 
-  for (const product of products) {
-    const image = await getImageUrl(product.image_url);
+    for (const product of products) {
+      const image = await getImageUrl(product.image_url);
 
-    const card = document.createElement("article");
-    card.className = "product-card";
+      const card = document.createElement("article");
+      card.className = "product-card";
 
-    card.innerHTML = `
-      <div class="product-image">
-        ${
-          image
-          ? `<img src="${escapeHTML(image)}" alt="${escapeHTML(product.name)}">`
-          : `<span class="product-placeholder">GILDA SHOP</span>`
-        }
-      </div>
-
-      <div class="product-info">
-        <h3>${escapeHTML(product.name)}</h3>
-        <p class="product-price">${money(product.price_toman)} تومان</p>
-        <p class="product-stock">
-          ${
-            product.stock > 0
-            ? `موجودی: ${money(product.stock)}`
-            : "ناموجود"
+      card.innerHTML = `
+        <div class="product-image">
+          ${image
+            ? `<img src="${escapeHTML(image)}" alt="${escapeHTML(product.name)}">`
+            : `<span class="product-placeholder">GILDA SHOP</span>`
           }
-        </p>
+        </div>
+        <div class="product-info">
+          <h3>${escapeHTML(product.name)}</h3>
+          <p class="product-price">
+            ${money(product.price_toman)} تومان
+          </p>
+          <p>
+            ${product.stock > 0
+              ? `موجودی: ${money(product.stock)}`
+              : "ناموجود"
+            }
+          </p>
+          <button class="main-btn"
+            ${product.stock <= 0 ? "disabled" : ""}
+            data-add="${escapeHTML(product.id)}">
+            افزودن به سبد خرید
+          </button>
+        </div>
+      `;
 
-        <button
-          class="main-btn"
-          ${product.stock <= 0 ? "disabled" : ""}
-          data-add="${escapeHTML(product.id)}"
-        >
-          افزودن به سبد خرید
-        </button>
-      </div>
-    `;
-
-    grid.appendChild(card);
+      grid.appendChild(card);
+    }
+  } catch (error) {
+    console.error("Products error:", error);
+    grid.textContent = "دریافت محصولات ناموفق بود. اتصال را بررسی کن.";
   }
 }
 
@@ -320,7 +333,7 @@ document.querySelectorAll(".category-btn").forEach(button => {
 });
 
 // =================================
-// CART
+// SHOPPING CART
 // =================================
 
 function saveCart() {
@@ -333,9 +346,10 @@ function addToCart(product) {
 
   if (existing) {
     if (existing.quantity >= product.stock) {
-      notify("بیشتر از موجودی نمی‌توانی انتخاب کنی.");
+      notify("موجودی کافی نیست.");
       return;
     }
+
     existing.quantity++;
   } else {
     cart.push({
@@ -392,16 +406,14 @@ $("productsGrid").addEventListener("click", async event => {
     .maybeSingle();
 
   if (error || !data || data.stock <= 0) {
-    notify("این محصول در حال حاضر موجود نیست.");
+    notify("این محصول موجود نیست.");
     await loadProducts();
     return;
   }
 
-  const currentQuantity = cart.find(
-    item => item.id === data.id
-  )?.quantity || 0;
+  const quantity = cart.find(item => item.id === data.id)?.quantity || 0;
 
-  if (currentQuantity >= data.stock) {
+  if (quantity >= data.stock) {
     notify("موجودی کافی نیست.");
     return;
   }
@@ -425,13 +437,13 @@ $("closeCart").addEventListener("click", () => {
   $("cartPanel").classList.add("hidden");
 });
 
-// پرداخت و ثبت سفارش بعد از راه‌اندازی امن بخش سفارش فعال می‌شود.
+// CHECKOUT - NOT YET ENABLED
 $("checkoutButton").addEventListener("click", () => {
-  notify("درگاه و ثبت سفارش هنوز راه‌اندازی نشده است.");
+  notify("ثبت سفارش و درگاه پرداخت هنوز راه‌اندازی نشده است.");
 });
 
 // =================================
-// ADMIN - PRODUCTS
+// ADMIN PRODUCTS
 // =================================
 
 async function loadAdminProducts() {
@@ -444,41 +456,39 @@ async function loadAdminProducts() {
     .order("created_at", { ascending: false });
 
   if (error) {
+    console.error(error);
     list.textContent = "خطا در دریافت محصولات.";
     return;
   }
 
   list.innerHTML = "";
 
-  if (!data.length) {
+  if (!data || !data.length) {
     list.textContent = "هنوز محصولی ثبت نشده است.";
     return;
   }
 
   for (const product of data) {
     const image = await getImageUrl(product.image_url);
+
     const row = document.createElement("div");
     row.className = "admin-product";
 
     row.innerHTML = `
-      ${
-        image
+      ${image
         ? `<img src="${escapeHTML(image)}" alt="">`
         : `<div class="product-placeholder">GILDA</div>`
       }
-
       <div>
         <strong>${escapeHTML(product.name)}</strong>
         <p>${money(product.price_toman)} تومان</p>
         <p>موجودی: ${money(product.stock)}</p>
         <p>${product.is_active ? "فعال" : "غیرفعال"}</p>
       </div>
-
       <div class="admin-actions">
         <button data-edit="${escapeHTML(product.id)}">ویرایش</button>
-        <button class="delete-btn" data-delete="${escapeHTML(product.id)}">
-          حذف
-        </button>
+        <button class="delete-btn"
+          data-delete="${escapeHTML(product.id)}">حذف</button>
       </div>
     `;
 
@@ -491,20 +501,21 @@ $("productForm").addEventListener("submit", async event => {
 
   if (!currentUser || !(await verifyAdmin())) return;
 
-  const id = $("productId").value;
-  const file = $("productImage").files[0];
-
   const button = event.submitter;
   button.disabled = true;
+
   $("productMessage").textContent = "در حال ذخیره...";
 
   try {
+    const id = $("productId").value;
+    const file = $("productImage").files[0];
+
     const name = $("productName").value.trim();
     const price = Number($("productPrice").value);
     const stock = Number($("productStock").value);
 
-    if (!name || !Number.isSafeInteger(price) ||
-        price < 0 || !Number.isInteger(stock) || stock < 0) {
+    if (!name || !Number.isSafeInteger(price) || price < 0 ||
+        !Number.isInteger(stock) || stock < 0) {
       throw new Error("اطلاعات محصول معتبر نیست.");
     }
 
@@ -532,10 +543,11 @@ $("productForm").addEventListener("submit", async event => {
 
       if (error) throw error;
 
-      $("productMessage").textContent = "محصول ویرایش شد.";
+      notify("محصول ویرایش شد.");
     } else {
       values.slug = makeSlug(name);
       values.image_url = imagePath;
+      values.is_active = true;
 
       const { error } = await db
         .from("products")
@@ -543,16 +555,18 @@ $("productForm").addEventListener("submit", async event => {
 
       if (error) throw error;
 
-      $("productMessage").textContent = "محصول اضافه شد.";
+      notify("محصول جدید اضافه شد.");
     }
 
     $("productForm").reset();
     $("productId").value = "";
+    $("cancelEdit").classList.add("hidden");
 
     await loadAdminProducts();
     await loadProducts();
 
   } catch (error) {
+    console.error(error);
     $("productMessage").textContent =
       error.message || "ذخیره محصول ناموفق بود.";
   } finally {
@@ -616,7 +630,7 @@ $("cancelEdit").addEventListener("click", () => {
 });
 
 // =================================
-// ADMIN - ORDERS
+// ADMIN ORDERS
 // =================================
 
 async function loadOrders() {
@@ -631,18 +645,19 @@ async function loadOrders() {
     .order("created_at", { ascending: false });
 
   if (error) {
+    console.error(error);
     list.textContent = "دریافت سفارش‌ها ناموفق بود.";
     return;
   }
 
   list.innerHTML = "";
 
-  if (!data.length) {
+  if (!data || !data.length) {
     list.textContent = "هنوز سفارشی ثبت نشده است.";
     return;
   }
 
-  const statusNames = {
+  const statuses = {
     pending: "در انتظار بررسی",
     confirmed: "تأیید شده",
     shipped: "ارسال شده",
@@ -660,9 +675,8 @@ async function loadOrders() {
         <p>تلفن: ${escapeHTML(order.phone)}</p>
         <p>آدرس: ${escapeHTML(order.address)}</p>
         <p>مبلغ: ${money(order.total_toman)} تومان</p>
-        <p>وضعیت: ${statusNames[order.status] || "نامشخص"}</p>
+        <p>وضعیت: ${statuses[order.status] || "نامشخص"}</p>
       </div>
-
       <select data-order-status="${escapeHTML(order.id)}">
         <option value="pending">در انتظار بررسی</option>
         <option value="confirmed">تأیید شده</option>
@@ -709,7 +723,9 @@ document.querySelectorAll(".admin-tab").forEach(button => {
     document.querySelectorAll(".admin-tab-content")
       .forEach(item => item.classList.add("hidden"));
 
-    $(button.dataset.tab).classList.remove("hidden");
+    const target = $(button.dataset.tab);
+
+    if (target) target.classList.remove("hidden");
 
     if (button.dataset.tab === "ordersAdmin") {
       await loadOrders();
@@ -726,16 +742,23 @@ async function initialize() {
 
   await loadProducts();
 
-  const { data } = await db.auth.getSession();
+  try {
+    const { data, error } = await db.auth.getSession();
 
-  if (data.session) {
-    currentUser = data.session.user;
+    if (error) throw error;
 
-    if (await verifyAdmin()) {
-      showDashboard();
-      await loadAdminProducts();
-      await loadOrders();
+    if (data.session) {
+      currentUser = data.session.user;
+
+      if (await verifyAdmin()) {
+        showDashboard();
+        await loadAdminProducts();
+        await loadOrders();
+      }
     }
+  } catch (error) {
+    console.error("Initialization error:", error);
+    notify("خطا در بررسی وضعیت ورود.");
   }
 }
 
