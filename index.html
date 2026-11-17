@@ -1,0 +1,159 @@
+# gilda-shop
+
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#111111">
+  <title>GILDA SHOP | فروشگاه آنلاین</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+
+  <header class="header">
+    <a href="#" class="logo">GILDA <span>SHOP</span></a>
+    <nav>
+      <a href="#home">خانه</a>
+      <a href="#shop">فروشگاه</a>
+      <a href="#about">درباره ما</a>
+    </nav>
+    <button id="cartButton" class="outline-btn">سبد خرید <span id="cartCount">۰</span></button>
+  </header>
+
+  <main>
+    <section class="hero" id="home">
+      <p>مجموعه جدید ۱۴۰۵</p>
+      <h1>استایل خودت رو بپوش.</h1>
+      <p>GILDA SHOP | فروشگاه پوشاک یونیسکس</p>
+      <a href="#shop" class="main-btn">مشاهده محصولات</a>
+    </section>
+
+    <section class="shop-section" id="shop">
+      <div class="section-heading">
+        <p>انتخاب کن، متفاوت باش</p>
+        <h2>فروشگاه محصولات</h2>
+      </div>
+
+      <div class="categories">
+        <button class="category-btn active" data-category="all">همه</button>
+        <button class="category-btn" data-category="tshirt">تیشرت</button>
+        <button class="category-btn" data-category="hoodie">هودی</button>
+        <button class="category-btn" data-category="hat">کلاه</button>
+        <button class="category-btn" data-category="belt">کمربند</button>
+      </div>
+
+      <div id="productsGrid" class="products-grid">
+        <p>در حال دریافت محصولات...</p>
+      </div>
+    </section>
+
+    <section class="about" id="about">
+      <h2>درباره GILDA SHOP</h2>
+      <p>استایل ساده، انتخاب متفاوت.</p>
+    </section>
+  </main>
+
+  <footer>
+    <h2>GILDA SHOP</h2>
+    <p>تمام حقوق محفوظ است.</p>
+  </footer>
+
+  <!-- سبد خرید -->
+  <div id="cartPanel" class="overlay hidden">
+    <div class="panel">
+      <button id="closeCart" class="close-btn">×</button>
+      <h2>سبد خرید</h2>
+      <div id="cartItems"></div>
+      <h3>مجموع: <span id="cartTotal">۰</span> تومان</h3>
+      <button id="checkoutButton" class="main-btn">ثبت سفارش</button>
+    </div>
+  </div>
+
+  <!-- ورود مدیر -->
+  <section id="adminLogin" class="admin-page hidden">
+    <div class="admin-box">
+      <h2>ورود مدیریت</h2>
+      <p>GILDA SHOP ADMIN</p>
+      <form id="loginForm">
+        <label for="adminEmail">ایمیل مدیر</label>
+        <input id="adminEmail" type="email" required autocomplete="username">
+        <label for="adminPassword">رمز عبور</label>
+        <input id="adminPassword" type="password" required autocomplete="current-password">
+        <button class="main-btn" type="submit">ورود به پنل</button>
+        <p id="loginMessage" class="message"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- پنل مدیریت -->
+  <section id="adminDashboard" class="admin-page hidden">
+    <div class="admin-container">
+      <div class="admin-top">
+        <div>
+          <p>GILDA SHOP</p>
+          <h2>پنل مدیریت</h2>
+        </div>
+        <button id="logoutButton" class="outline-btn">خروج</button>
+      </div>
+
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-tab="productsAdmin">محصولات</button>
+        <button class="admin-tab" data-tab="ordersAdmin">سفارش‌ها</button>
+      </div>
+
+      <div id="productsAdmin" class="admin-tab-content">
+        <h3>افزودن محصول جدید</h3>
+        <form id="productForm" class="product-form">
+          <input id="productId" type="hidden">
+
+          <label for="productName">نام محصول</label>
+          <input id="productName" type="text" required>
+
+          <label for="productCategory">دسته‌بندی</label>
+          <select id="productCategory" required>
+            <option value="tshirt">تیشرت</option>
+            <option value="hoodie">هودی</option>
+            <option value="hat">کلاه</option>
+            <option value="belt">کمربند</option>
+          </select>
+
+          <label for="productPrice">قیمت به تومان</label>
+          <input id="productPrice" type="number" min="0" required>
+
+          <label for="productStock">موجودی</label>
+          <input id="productStock" type="number" min="0" value="0" required>
+
+          <label for="productDescription">توضیحات</label>
+          <textarea id="productDescription"></textarea>
+
+          <label for="productImage">عکس محصول</label>
+          <input id="productImage" type="file" accept="image/*">
+
+          <button class="main-btn" type="submit">ذخیره محصول</button>
+          <button id="cancelEdit" type="button" class="outline-btn hidden">لغو ویرایش</button>
+          <p id="productMessage" class="message"></p>
+        </form>
+
+        <h3>محصولات ثبت‌شده</h3>
+        <div id="adminProductsList"></div>
+      </div>
+
+      <div id="ordersAdmin" class="admin-tab-content hidden">
+        <h3>مدیریت سفارش‌ها</h3>
+        <div id="adminOrdersList">در حال دریافت سفارش‌ها...</div>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <button id="adminAccessButton" class="admin-access" type="button">
+    مدیریت
+  </button>
+
+</body>
+</html>
