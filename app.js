@@ -1,7 +1,6 @@
-
 /* =====================================================
    GILDA SHOP - COMPLETE APPLICATION
-   Supabase | Products | Cart | Checkout | Admin
+   Supabase | Products | Cart | Checkout | Receipt | Admin
    Persian RTL | Card-to-card payment
 ===================================================== */
 
@@ -19,6 +18,7 @@ const SUPABASE_KEY =
 if (!window.supabase) {
   document.body.innerHTML =
     '<div style="direction:rtl;text-align:center;padding:40px;font-family:sans-serif">خطا در اتصال به سرویس فروشگاه. صفحه را دوباره بارگذاری کنید.</div>';
+
   throw new Error("Supabase library is not loaded.");
 }
 
@@ -99,12 +99,17 @@ function setLoading(button, loading, loadingText = "لطفاً صبر کنید..
   if (!button) return;
 
   if (loading) {
-    button.dataset.originalText = button.textContent;
+    if (!button.dataset.originalText) {
+      button.dataset.originalText = button.textContent;
+    }
+
     button.textContent = loadingText;
     button.disabled = true;
   } else {
     button.textContent =
       button.dataset.originalText || button.textContent;
+
+    delete button.dataset.originalText;
     button.disabled = false;
   }
 }
@@ -130,13 +135,17 @@ let products = [];
 let cart = [];
 let currentCategory = "all";
 let currentUser = null;
+
 let currentOrderId = null;
+let currentReceiptToken = null;
 let currentPaymentSettings = null;
 
 const CART_STORAGE_KEY = "gilda_shop_cart";
 
 try {
-  cart = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || "[]");
+  cart = JSON.parse(
+    localStorage.getItem(CART_STORAGE_KEY) || "[]"
+  );
 
   if (!Array.isArray(cart)) {
     cart = [];
@@ -146,7 +155,10 @@ try {
 }
 
 function saveCart() {
-  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+  localStorage.setItem(
+    CART_STORAGE_KEY,
+    JSON.stringify(cart)
+  );
 }
 
 // =====================================================
@@ -161,7 +173,10 @@ function showStore() {
   document.querySelector(".header")?.classList.remove("hidden");
   document.querySelector(".footer")?.classList.remove("hidden");
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 }
 
 function showLogin() {
@@ -172,7 +187,10 @@ function showLogin() {
   hideElement("adminDashboard");
   showElement("adminLogin");
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 }
 
 function showDashboard() {
@@ -183,7 +201,10 @@ function showDashboard() {
   hideElement("adminLogin");
   showElement("adminDashboard");
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 }
 
 window.showStore = showStore;
@@ -326,6 +347,7 @@ document.querySelectorAll(".category-button").forEach((button) => {
     });
 
     button.classList.add("active");
+
     currentCategory = button.dataset.category || "all";
 
     await renderProducts();
@@ -371,6 +393,7 @@ function addToCart(productId) {
 
   saveCart();
   updateCart();
+
   notify("محصول به سبد خرید اضافه شد.");
 }
 
@@ -506,7 +529,7 @@ function updateCart() {
 }
 
 // =====================================================
-// 10. CART EVENT DELEGATION
+// 10. CART EVENTS
 // =====================================================
 
 $("productsGrid")?.addEventListener("click", (event) => {
@@ -530,9 +553,7 @@ $("cartItems")?.addEventListener("click", (event) => {
   if (removeButton) {
     removeFromCart(removeButton.dataset.cartRemove);
   }
-});
-
-// =====================================================
+});// =====================================================
 // 11. OPEN / CLOSE CART
 // =====================================================
 
@@ -554,6 +575,12 @@ $("cartOverlay")?.addEventListener("click", closeCart);
 // =====================================================
 
 $("checkoutButton")?.addEventListener("click", () => {
+  if (currentReceiptToken) {
+    showElement("paymentModal");
+    notify("ابتدا رسید سفارش قبلی را ارسال کنید.", "error");
+    return;
+  }
+
   if (!cart.length) {
     notify("سبد خرید شما خالی است.", "error");
     return;
@@ -579,11 +606,17 @@ $("checkoutModal")?.addEventListener("click", (event) => {
 });
 
 // =====================================================
-// 13. CREATE ORDER
+// 13. CREATE ORDER WITH RECEIPT TOKEN
 // =====================================================
 
 $("checkoutForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();
+
+  if (currentReceiptToken) {
+    showElement("paymentModal");
+    notify("ابتدا رسید سفارش قبلی را ارسال کنید.", "error");
+    return;
+  }
 
   if (!cart.length) {
     notify("سبد خرید شما خالی است.", "error");
@@ -609,26 +642,39 @@ $("checkoutForm")?.addEventListener("submit", async (event) => {
       quantity: Number(item.quantity)
     }));
 
-    const { data, error } = await db.rpc("create_order", {
-      p_customer_name: customerName,
-      p_phone: phone,
-      p_city: city,
-      p_address: address,
-      p_postal_code: postalCode,
-      p_items: items
-    });
+    const { data, error } = await db.rpc(
+      "create_order_with_receipt_token",
+      {
+        p_customer_name: customerName,
+        p_phone: phone,
+        p_city: city,
+        p_address: address,
+        p_postal_code: postalCode,
+        p_items: items
+      }
+    );
 
     if (error) throw error;
 
-    currentOrderId =
-      typeof data === "string"
-        ? data
-        : data?.id || data?.order_id || data?.[0]?.id || null;
+    currentOrderId = data?.order_id || null;
+    currentReceiptToken = data?.receipt_token || null;
 
-    if (!currentOrderId) {
+    if (!currentOrderId || !currentReceiptToken) {
+      currentOrderId = null;
+      currentReceiptToken = null;
+
       throw new Error(
-        "سفارش ثبت شد، اما شناسه سفارش دریافت نشد. با مدیریت فروشگاه تماس بگیرید."
+        "اطلاعات امنیتی سفارش دریافت نشد. با مدیریت تماس بگیرید."
       );
+    }
+
+    if ($("receiptFile")) {
+      $("receiptFile").disabled = false;
+      $("receiptFile").value = "";
+    }
+
+    if ($("uploadReceiptButton")) {
+      $("uploadReceiptButton").disabled = false;
     }
 
     cart = [];
@@ -642,13 +688,17 @@ $("checkoutForm")?.addEventListener("submit", async (event) => {
 
     showElement("paymentModal");
 
-    notify("سفارش شما با موفقیت ثبت شد.");
+    notify("سفارش ثبت شد. پس از پرداخت، تصویر رسید را ارسال کنید.");
 
     await loadProducts();
 
   } catch (error) {
     console.error("Checkout error:", error);
-    notify(error.message || "ثبت سفارش انجام نشد.", "error");
+
+    notify(
+      error.message || "ثبت سفارش انجام نشد.",
+      "error"
+    );
   } finally {
     setLoading(button, false);
   }
@@ -662,7 +712,8 @@ async function loadPaymentDetails() {
   const container = $("paymentDetails");
   if (!container) return;
 
-  container.innerHTML = "<p>در حال دریافت اطلاعات پرداخت...</p>";
+  container.innerHTML =
+    "<p>در حال دریافت اطلاعات پرداخت...</p>";
 
   const { data, error } = await db.rpc(
     "get_public_payment_settings"
@@ -672,7 +723,7 @@ async function loadPaymentDetails() {
     console.error("Payment settings error:", error);
 
     container.innerHTML =
-      '<p class="empty-message">دریافت اطلاعات پرداخت با مشکل مواجه شد. با فروشگاه تماس بگیرید.</p>';
+      '<p class="empty-message">دریافت اطلاعات پرداخت ناموفق بود. با فروشگاه تماس بگیرید.</p>';
 
     return;
   }
@@ -683,9 +734,13 @@ async function loadPaymentDetails() {
 
   container.innerHTML = `
     <div class="payment-info">
-      <p><strong>فروشگاه:</strong> ${escapeHTML(settings.store_name || "GILDA SHOP")}</p>
+      <p><strong>فروشگاه:</strong>
+        ${escapeHTML(settings.store_name || "GILDA SHOP")}
+      </p>
 
-      <p><strong>بانک:</strong> ${escapeHTML(settings.bank_name || "ثبت نشده")}</p>
+      <p><strong>بانک:</strong>
+        ${escapeHTML(settings.bank_name || "ثبت نشده")}
+      </p>
 
       <p><strong>شماره کارت:</strong></p>
 
@@ -693,18 +748,26 @@ async function loadPaymentDetails() {
         ${escapeHTML(formatCardNumber(settings.card_number || "شماره کارت ثبت نشده"))}
       </strong>
 
-      <p><strong>صاحب حساب:</strong> ${escapeHTML(settings.account_holder || "ثبت نشده")}</p>
+      <p><strong>صاحب حساب:</strong>
+        ${escapeHTML(settings.account_holder || "ثبت نشده")}
+      </p>
 
       <p>${escapeHTML(settings.payment_note || "")}</p>
     </div>
 
     <p class="payment-warning">
-      لطفاً پس از واریز، اطلاعات پرداخت را نزد خود نگه دارید.
+      لطفاً پس از واریز، تصویر رسید را در همین صفحه ارسال کنید.
     </p>
 
-    <p><strong>شماره سفارش:</strong> ${escapeHTML(currentOrderId || "")}</p>
+    <p><strong>شماره سفارش:</strong>
+      ${escapeHTML(currentOrderId || "")}
+    </p>
   `;
 }
+
+// =====================================================
+// 15. CLOSE PAYMENT
+// =====================================================
 
 $("closePayment")?.addEventListener("click", () => {
   hideElement("paymentModal");
@@ -717,22 +780,104 @@ $("paymentModal")?.addEventListener("click", (event) => {
 });
 
 // =====================================================
-// 15. RECEIPT UPLOAD
+// 16. RECEIPT UPLOAD
 // =====================================================
 
-// ارسال رسید عمداً غیرفعال است.
-// برای فعال‌سازی امن آن باید یک endpoint یا Edge Function
-// با کنترل دسترسی سفارش ساخته شود.
+$("uploadReceiptButton")?.addEventListener("click", async () => {
+  const button = $("uploadReceiptButton");
+  const fileInput = $("receiptFile");
+  const file = fileInput?.files?.[0];
 
-$("uploadReceiptButton")?.addEventListener("click", () => {
-  notify(
-    "ارسال رسید هنوز فعال نشده است. لطفاً رسید را برای مدیریت فروشگاه ارسال کنید.",
-    "error"
-  );
+  if (!currentOrderId || !currentReceiptToken) {
+    notify("اطلاعات سفارش معتبر نیست.", "error");
+    return;
+  }
+
+  if (!file) {
+    notify("ابتدا تصویر رسید را انتخاب کنید.", "error");
+    return;
+  }
+
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ];
+
+  if (!allowedTypes.includes(file.type)) {
+    notify("فرمت تصویر باید JPG، PNG یا WEBP باشد.", "error");
+    return;
+  }
+
+  if (file.size === 0 || file.size > 5 * 1024 * 1024) {
+    notify("حجم تصویر باید حداکثر ۵ مگابایت باشد.", "error");
+    return;
+  }
+
+  setLoading(button, true, "در حال ارسال رسید...");
+
+  try {
+    const formData = new FormData();
+
+    formData.append("order_id", currentOrderId);
+    formData.append("token", currentReceiptToken);
+    formData.append("file", file);
+
+    const response = await fetch(
+      `${SUPABASE_URL}/functions/v1/upload-payment-receipt`,
+      {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY
+        },
+        body: formData
+      }
+    );
+
+    let result;
+
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("پاسخ سرور معتبر نیست. دوباره تلاش کنید.");
+    }
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result.error || "ارسال رسید ناموفق بود."
+      );
+    }
+
+    currentReceiptToken = null;
+    currentOrderId = null;
+
+    if (fileInput) {
+      fileInput.value = "";
+      fileInput.disabled = true;
+    }
+
+    button.disabled = true;
+
+    hideElement("paymentModal");
+
+    notify("رسید با موفقیت ارسال شد. منتظر بررسی مدیریت باشید.");
+
+  } catch (error) {
+    console.error("Receipt upload error:", error);
+
+    notify(
+      error.message || "ارسال رسید ناموفق بود. دوباره تلاش کنید.",
+      "error"
+    );
+  } finally {
+    if (currentReceiptToken) {
+      setLoading(button, false);
+    }
+  }
 });
 
 // =====================================================
-// 16. ADMIN AUTHENTICATION
+// 17. ADMIN AUTHENTICATION
 // =====================================================
 
 async function verifyAdmin(user) {
@@ -758,9 +903,13 @@ async function openAdminPanel() {
 
   if (!isAdmin) {
     await db.auth.signOut();
+
     currentUser = null;
+
     showLogin();
+
     notify("این حساب دسترسی مدیریت ندارد.", "error");
+
     return;
   }
 
@@ -773,16 +922,20 @@ async function openAdminPanel() {
   ]);
 }
 
-$("adminAccessButton")?.addEventListener("click", openAdminPanel);
+$("adminAccessButton")?.addEventListener(
+  "click",
+  openAdminPanel
+);
 
 // =====================================================
-// 17. ADMIN LOGIN FORM
+// 18. ADMIN LOGIN
 // =====================================================
 
 $("loginForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const button = event.submitter;
+
   setLoading(button, true, "در حال ورود...");
 
   try {
@@ -802,8 +955,12 @@ $("loginForm")?.addEventListener("submit", async (event) => {
 
     if (!isAdmin) {
       await db.auth.signOut();
+
       currentUser = null;
-      throw new Error("این حساب اجازه ورود به پنل مدیریت را ندارد.");
+
+      throw new Error(
+        "این حساب اجازه ورود به پنل مدیریت را ندارد."
+      );
     }
 
     $("loginForm").reset();
@@ -820,6 +977,7 @@ $("loginForm")?.addEventListener("submit", async (event) => {
 
   } catch (error) {
     console.error("Login error:", error);
+
     setMessage(
       "loginMessage",
       error.message || "ورود ناموفق بود.",
@@ -831,7 +989,7 @@ $("loginForm")?.addEventListener("submit", async (event) => {
 });
 
 // =====================================================
-// 18. AUTH STATE
+// 19. AUTH STATE
 // =====================================================
 
 db.auth.onAuthStateChange((_event, session) => {
@@ -839,7 +997,7 @@ db.auth.onAuthStateChange((_event, session) => {
 });
 
 // =====================================================
-// 19. LOGOUT
+// 20. LOGOUT
 // =====================================================
 
 $("logoutButton")?.addEventListener("click", async () => {
@@ -852,12 +1010,12 @@ $("logoutButton")?.addEventListener("click", async () => {
   }
 
   currentUser = null;
-  showStore();
-  notify("از حساب مدیریت خارج شدید.");
-});
 
-// =====================================================
-// 20. ADMIN TABS
+  showStore();
+
+  notify("از حساب مدیریت خارج شدید.");
+});// =====================================================
+// 21. ADMIN TABS
 // =====================================================
 
 document.querySelectorAll(".admin-tab").forEach((button) => {
@@ -893,7 +1051,7 @@ document.querySelectorAll(".admin-tab").forEach((button) => {
 });
 
 // =====================================================
-// 21. ADMIN PRODUCTS
+// 22. ADMIN PRODUCTS
 // =====================================================
 
 async function loadAdminProducts() {
@@ -909,8 +1067,10 @@ async function loadAdminProducts() {
 
   if (error) {
     console.error("Admin products error:", error);
+
     container.innerHTML =
       "<p>دریافت محصولات ناموفق بود. دسترسی مدیریت را بررسی کنید.</p>";
+
     return;
   }
 
@@ -923,6 +1083,7 @@ async function loadAdminProducts() {
 
   for (const product of data) {
     const row = document.createElement("div");
+
     row.className = "admin-product-item";
 
     row.innerHTML = `
@@ -943,7 +1104,9 @@ async function loadAdminProducts() {
           type="button"
           data-toggle-product="${escapeHTML(product.id)}"
           data-active="${product.is_active ? "true" : "false"}"
-        >${product.is_active ? "غیرفعال کردن" : "فعال کردن"}</button>
+        >
+          ${product.is_active ? "غیرفعال کردن" : "فعال کردن"}
+        </button>
 
         <button
           type="button"
@@ -957,7 +1120,7 @@ async function loadAdminProducts() {
 }
 
 // =====================================================
-// 22. PRODUCT IMAGE UPLOAD
+// 23. PRODUCT IMAGE UPLOAD
 // =====================================================
 
 async function uploadProductImage(file) {
@@ -973,16 +1136,19 @@ async function uploadProductImage(file) {
     throw new Error("فرمت تصویر باید JPG، PNG یا WEBP باشد.");
   }
 
-  if (file.size > 5 * 1024 * 1024) {
-    throw new Error("حجم تصویر نباید بیشتر از ۵ مگابایت باشد.");
+  if (file.size === 0 || file.size > 5 * 1024 * 1024) {
+    throw new Error("حجم تصویر باید حداکثر ۵ مگابایت باشد.");
   }
 
-  const extension = file.name.split(".").pop().toLowerCase();
+  const extension = file.type === "image/jpeg"
+    ? "jpg"
+    : file.type === "image/png"
+      ? "png"
+      : "webp";
 
   const path =
     Date.now() + "-" +
-    Math.random().toString(36).slice(2) +
-    "." + extension;
+    crypto.randomUUID() + "." + extension;
 
   const { error } = await db.storage
     .from("product-images")
@@ -998,13 +1164,14 @@ async function uploadProductImage(file) {
 }
 
 // =====================================================
-// 23. SAVE PRODUCT
+// 24. SAVE PRODUCT
 // =====================================================
 
 $("productForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const button = event.submitter;
+
   setLoading(button, true, "در حال ذخیره...");
 
   try {
@@ -1016,7 +1183,14 @@ $("productForm")?.addEventListener("submit", async (event) => {
     const description = $("productDescription").value.trim();
     const file = $("productImage").files[0];
 
-    if (!name || !category || price <= 0 || stock < 0) {
+    if (
+      !name ||
+      !category ||
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      !Number.isInteger(stock) ||
+      stock < 0
+    ) {
       throw new Error("اطلاعات محصول را بررسی کنید.");
     }
 
@@ -1056,11 +1230,15 @@ $("productForm")?.addEventListener("submit", async (event) => {
     if (result.error) throw result.error;
 
     $("productForm").reset();
+
     $("productId").value = "";
 
     hideElement("cancelEdit");
 
-    setMessage("productMessage", "محصول با موفقیت ذخیره شد.");
+    setMessage(
+      "productMessage",
+      "محصول با موفقیت ذخیره شد."
+    );
 
     await loadAdminProducts();
     await loadProducts();
@@ -1081,7 +1259,7 @@ $("productForm")?.addEventListener("submit", async (event) => {
 });
 
 // =====================================================
-// 24. EDIT / DELETE / TOGGLE PRODUCT
+// 25. EDIT / DELETE / TOGGLE PRODUCT
 // =====================================================
 
 $("adminProductsList")?.addEventListener("click", async (event) => {
@@ -1090,11 +1268,9 @@ $("adminProductsList")?.addEventListener("click", async (event) => {
   const toggleButton = event.target.closest("[data-toggle-product]");
 
   if (editButton) {
-    const product = products.find(
+    let selectedProduct = products.find(
       (item) => String(item.id) === String(editButton.dataset.editProduct)
     );
-
-    let selectedProduct = product;
 
     if (!selectedProduct) {
       const { data, error } = await db
@@ -1169,21 +1345,31 @@ $("adminProductsList")?.addEventListener("click", async (event) => {
 
 $("cancelEdit")?.addEventListener("click", () => {
   $("productForm")?.reset();
-  $("productId").value = "";
+
+  if ($("productId")) {
+    $("productId").value = "";
+  }
+
   hideElement("cancelEdit");
 });
 
 // =====================================================
-// 25. ADMIN ORDERS
+// 26. ORDER STATUSES
 // =====================================================
 
 const orderStatuses = {
-  pending: "در انتظار بررسی",
+  pending: "در انتظار ارسال رسید",
+  awaiting_payment_review: "در انتظار بررسی پرداخت",
+  payment_rejected: "پرداخت رد شده",
   confirmed: "تأیید شده",
   shipped: "ارسال شده",
   delivered: "تحویل شده",
   cancelled: "لغو شده"
 };
+
+// =====================================================
+// 27. ADMIN ORDERS
+// =====================================================
 
 async function loadAdminOrders() {
   const container = $("adminOrdersList");
@@ -1193,13 +1379,27 @@ async function loadAdminOrders() {
 
   const { data, error } = await db
     .from("orders")
-    .select("*, order_items(*)")
+    .select(`
+      id,
+      customer_name,
+      phone,
+      city,
+      address,
+      postal_code,
+      status,
+      total_toman,
+      created_at,
+      receipt_path,
+      order_items(*)
+    `)
     .order("created_at", { ascending: false });
 
   if (error) {
     console.error("Orders error:", error);
+
     container.innerHTML =
       "<p>دریافت سفارش‌ها ناموفق بود. دسترسی مدیریت را بررسی کنید.</p>";
+
     return;
   }
 
@@ -1210,8 +1410,9 @@ async function loadAdminOrders() {
 
   container.innerHTML = "";
 
-  data.forEach((order) => {
+  for (const order of data) {
     const card = document.createElement("div");
+
     card.className = "admin-order-item";
 
     const items = (order.order_items || []).map((item) => `
@@ -1231,20 +1432,74 @@ async function loadAdminOrders() {
       `
     ).join("");
 
+    let receiptHTML = "<p>هنوز رسیدی ارسال نشده است.</p>";
+
+    if (
+      order.receipt_path &&
+      !order.receipt_path.startsWith("uploading:")
+    ) {
+      const { data: signedData, error: signedError } =
+        await db.storage
+          .from("payment-receipts")
+          .createSignedUrl(order.receipt_path, 300);
+
+      if (!signedError && signedData?.signedUrl) {
+        receiptHTML = `
+          <a href="${escapeHTML(signedData.signedUrl)}"
+             target="_blank"
+             rel="noopener noreferrer">
+            مشاهده تصویر رسید پرداخت
+          </a>
+        `;
+      } else {
+        receiptHTML = "<p>دریافت تصویر رسید ناموفق بود.</p>";
+      }
+    } else if (
+      order.receipt_path &&
+      order.receipt_path.startsWith("uploading:")
+    ) {
+      receiptHTML = "<p>رسید در حال بارگذاری است.</p>";
+    }
+
     card.innerHTML = `
       <div class="admin-order-heading">
         <strong>سفارش ${escapeHTML(order.id)}</strong>
         <span>${money(order.total_toman)}</span>
       </div>
 
-      <p><strong>مشتری:</strong> ${escapeHTML(order.customer_name)}</p>
-      <p><strong>موبایل:</strong> ${escapeHTML(order.phone)}</p>
-      <p><strong>شهر:</strong> ${escapeHTML(order.city || "-")}</p>
-      <p><strong>آدرس:</strong> ${escapeHTML(order.address || "-")}</p>
-      <p><strong>کد پستی:</strong> ${escapeHTML(order.postal_code || "-")}</p>
+      <p><strong>تاریخ:</strong>
+        ${order.created_at
+          ? escapeHTML(new Date(order.created_at).toLocaleString("fa-IR"))
+          : "-"}
+      </p>
+
+      <p><strong>مشتری:</strong>
+        ${escapeHTML(order.customer_name)}
+      </p>
+
+      <p><strong>موبایل:</strong>
+        ${escapeHTML(order.phone)}
+      </p>
+
+      <p><strong>شهر:</strong>
+        ${escapeHTML(order.city || "-")}
+      </p>
+
+      <p><strong>آدرس:</strong>
+        ${escapeHTML(order.address || "-")}
+      </p>
+
+      <p><strong>کد پستی:</strong>
+        ${escapeHTML(order.postal_code || "-")}
+      </p>
 
       <p><strong>محصولات:</strong></p>
       <ul>${items}</ul>
+
+      <div class="order-receipt">
+        <strong>رسید پرداخت:</strong>
+        ${receiptHTML}
+      </div>
 
       <div class="order-status-control">
         <label>وضعیت سفارش:</label>
@@ -1261,11 +1516,11 @@ async function loadAdminOrders() {
     `;
 
     container.appendChild(card);
-  });
+  }
 }
 
 // =====================================================
-// 26. UPDATE ORDER STATUS
+// 28. UPDATE ORDER STATUS
 // =====================================================
 
 $("adminOrdersList")?.addEventListener("click", async (event) => {
@@ -1281,6 +1536,11 @@ $("adminOrdersList")?.addEventListener("click", async (event) => {
   if (!select) return;
 
   const status = select.value;
+
+  if (!Object.prototype.hasOwnProperty.call(orderStatuses, status)) {
+    notify("وضعیت انتخاب‌شده معتبر نیست.", "error");
+    return;
+  }
 
   const { error } = await db
     .from("orders")
@@ -1299,7 +1559,7 @@ $("adminOrdersList")?.addEventListener("click", async (event) => {
 });
 
 // =====================================================
-// 27. STORE SETTINGS
+// 29. STORE SETTINGS
 // =====================================================
 
 async function loadAdminSettings() {
@@ -1311,11 +1571,13 @@ async function loadAdminSettings() {
 
   if (error) {
     console.error("Settings load error:", error);
+
     setMessage(
       "settingsMessage",
       "دریافت تنظیمات ناموفق بود.",
       true
     );
+
     return;
   }
 
@@ -1329,13 +1591,14 @@ async function loadAdminSettings() {
 }
 
 // =====================================================
-// 28. SAVE STORE SETTINGS
+// 30. SAVE STORE SETTINGS
 // =====================================================
 
 $("settingsForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const button = event.submitter;
+
   setLoading(button, true, "در حال ذخیره...");
 
   try {
@@ -1355,7 +1618,11 @@ $("settingsForm")?.addEventListener("submit", async (event) => {
 
     if (error) throw error;
 
-    setMessage("settingsMessage", "تنظیمات ذخیره شد.");
+    setMessage(
+      "settingsMessage",
+      "تنظیمات ذخیره شد."
+    );
+
     notify("تنظیمات فروشگاه ذخیره شد.");
 
   } catch (error) {
@@ -1372,7 +1639,7 @@ $("settingsForm")?.addEventListener("submit", async (event) => {
 });
 
 // =====================================================
-// 29. GLOBAL ERROR HANDLING
+// 31. GLOBAL ERROR HANDLING
 // =====================================================
 
 window.addEventListener("unhandledrejection", (event) => {
@@ -1384,15 +1651,17 @@ window.addEventListener("error", (event) => {
 });
 
 // =====================================================
-// 30. INITIALIZE
+// 32. INITIALIZE
 // =====================================================
 
 async function initialize() {
-  // سازگاری با کلاس‌های نمایش و مخفی‌سازی
   if (!document.getElementById("gilda-hidden-style")) {
     const style = document.createElement("style");
+
     style.id = "gilda-hidden-style";
+
     style.textContent = ".hidden{display:none!important}";
+
     document.head.appendChild(style);
   }
 
@@ -1403,6 +1672,14 @@ async function initialize() {
   hideElement("checkoutModal");
   hideElement("paymentModal");
   hideElement("cancelEdit");
+
+  if ($("receiptFile")) {
+    $("receiptFile").disabled = true;
+  }
+
+  if ($("uploadReceiptButton")) {
+    $("uploadReceiptButton").disabled = true;
+  }
 
   showStore();
 
@@ -1422,5 +1699,9 @@ async function initialize() {
 
 initialize().catch((error) => {
   console.error("Initialization error:", error);
-  notify("راه‌اندازی فروشگاه با مشکل مواجه شد.", "error");
+
+  notify(
+    "راه‌اندازی فروشگاه با مشکل مواجه شد.",
+    "error"
+  );
 });
